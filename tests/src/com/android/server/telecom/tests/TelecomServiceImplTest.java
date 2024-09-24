@@ -31,6 +31,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
+import android.graphics.drawable.Icon;
 import android.net.Uri;
 import android.os.Binder;
 import android.os.Build;
@@ -390,9 +391,11 @@ public class TelecomServiceImplTest extends TelecomTestCase {
         makeAccountsVisibleToAllUsers(TEL_PA_HANDLE_16, SIP_PA_HANDLE_17);
 
         assertEquals(fullPHList,
-                mTSIBinder.getCallCapablePhoneAccounts(true, DEFAULT_DIALER_PACKAGE, null));
+                mTSIBinder.getCallCapablePhoneAccounts(
+                        true, DEFAULT_DIALER_PACKAGE, null).getList());
         assertEquals(smallPHList,
-                mTSIBinder.getCallCapablePhoneAccounts(false, DEFAULT_DIALER_PACKAGE, null));
+                mTSIBinder.getCallCapablePhoneAccounts(
+                        false, DEFAULT_DIALER_PACKAGE, null).getList());
     }
 
     @SmallTest
@@ -407,7 +410,7 @@ public class TelecomServiceImplTest extends TelecomTestCase {
 
         List<PhoneAccountHandle> result = null;
         try {
-            result = mTSIBinder.getCallCapablePhoneAccounts(true, "", null);
+            result = mTSIBinder.getCallCapablePhoneAccounts(true, "", null).getList();
         } catch (SecurityException e) {
             // intended behavior
         }
@@ -435,9 +438,11 @@ public class TelecomServiceImplTest extends TelecomTestCase {
         makeAccountsVisibleToAllUsers(TEL_PA_HANDLE_16, SIP_PA_HANDLE_17);
 
         assertEquals(telPHList,
-                mTSIBinder.getPhoneAccountsSupportingScheme("tel", DEFAULT_DIALER_PACKAGE));
+                mTSIBinder.getPhoneAccountsSupportingScheme(
+                        "tel", DEFAULT_DIALER_PACKAGE).getList());
         assertEquals(sipPHList,
-                mTSIBinder.getPhoneAccountsSupportingScheme("sip", DEFAULT_DIALER_PACKAGE));
+                mTSIBinder.getPhoneAccountsSupportingScheme(
+                        "sip", DEFAULT_DIALER_PACKAGE).getList());
     }
 
     @SmallTest
@@ -448,12 +453,12 @@ public class TelecomServiceImplTest extends TelecomTestCase {
             add(SIP_PA_HANDLE_17);
         }};
         when(mFakePhoneAccountRegistrar
-                .getPhoneAccountsForPackage(anyString(), any(UserHandle.class)))
+                .getAllPhoneAccountHandlesForPackage(any(UserHandle.class), anyString()))
                 .thenReturn(phoneAccountHandleList);
         makeAccountsVisibleToAllUsers(TEL_PA_HANDLE_16, SIP_PA_HANDLE_17);
         assertEquals(phoneAccountHandleList,
                 mTSIBinder.getPhoneAccountsForPackage(
-                        TEL_PA_HANDLE_16.getComponentName().getPackageName()));
+                        TEL_PA_HANDLE_16.getComponentName().getPackageName()).getList());
     }
 
     @SmallTest
@@ -476,7 +481,7 @@ public class TelecomServiceImplTest extends TelecomTestCase {
         when(mFakePhoneAccountRegistrar.getAllPhoneAccounts(any(UserHandle.class)))
                 .thenReturn(phoneAccountList);
 
-        assertEquals(2, mTSIBinder.getAllPhoneAccounts().size());
+        assertEquals(2, mTSIBinder.getAllPhoneAccounts().getList().size());
     }
 
     @SmallTest
@@ -585,6 +590,26 @@ public class TelecomServiceImplTest extends TelecomTestCase {
             verify(mFakePhoneAccountRegistrar, never())
                     .registerPhoneAccount(any(PhoneAccount.class));
         }
+    }
+
+    @SmallTest
+    @Test
+    public void testRegisterPhoneAccountImageIconCrossUser() throws RemoteException {
+        String packageNameToUse = "com.android.officialpackage";
+        PhoneAccountHandle phHandle = new PhoneAccountHandle(new ComponentName(
+                packageNameToUse, "cs"), "test", Binder.getCallingUserHandle());
+        Icon icon = Icon.createWithContentUri("content://10@media/external/images/media/");
+        PhoneAccount phoneAccount = makePhoneAccount(phHandle).setIcon(icon).build();
+        doReturn(PackageManager.PERMISSION_GRANTED)
+                .when(mContext).checkCallingOrSelfPermission(MODIFY_PHONE_STATE);
+
+        // This should fail; security exception will be thrown.
+        registerPhoneAccountTestHelper(phoneAccount, false);
+
+        icon = Icon.createWithContentUri("content://0@media/external/images/media/");
+        phoneAccount = makePhoneAccount(phHandle).setIcon(icon).build();
+        // This should succeed.
+        registerPhoneAccountTestHelper(phoneAccount, true);
     }
 
     @SmallTest
